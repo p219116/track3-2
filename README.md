@@ -1,20 +1,16 @@
 # HR Agentic Solution — 실습2: GCP 배포와 거버넌스
 
-실습1에서 **내 PC에서** 동작시킨 HR 에이전트를 **GCP Agent Engine에 배포**하고,
+실습1에서 **내 PC에서** 동작시킨 HR 에이전트를 **Gemini Enterprise Agent Platform의 Agent Runtime에 배포**하고,
 실제 회사에서 에이전트를 운영하면 부딪히는 문제를 **Agent Registry → Agent Gateway → Model Armor** 순서로 하나씩 해결합니다.
 모든 작업은 **Antigravity에 프롬프트를 넣어** 진행합니다.
 
 ```mermaid
 flowchart LR
-    P1["실습1<br/>로컬 실행"] --> S1["1단계<br/>Agent Engine<br/>배포"]
+    P1["실습1<br/>로컬 실행"] --> S1["1단계<br/>Agent Runtime<br/>배포"]
     S1 --> S2["2단계<br/>Agent Registry<br/>목록화"]
     S2 --> S3["3단계<br/>Agent Gateway<br/>호출 통제"]
     S3 --> S4["4단계<br/>Model Armor<br/>내용 검사"]
 ```
-
-> [!NOTE]
-> **Agent Engine**(Vertex AI Agent Engine)은 현재 **Gemini Enterprise Agent Platform**의 **Agent Runtime**이라는 이름으로 바뀌었습니다.
-> 콘솔과 문서에서 두 이름이 섞여 보일 수 있지만 같은 서비스입니다.
 
 ---
 
@@ -37,7 +33,7 @@ flowchart LR
 
 | 단계 | 시점 | 사건 | 해결 |
 |---|---|---|---|
-| **1** | 파일럿 오픈 직전 | 🙋 "HR 에이전트 좋다던데 어디서 써요?" — 에이전트가 **박지훈의 노트북**에서 돌고 있다. HR 시스템 토큰도 노트북에 평문으로 있다. | **Agent Engine** + Secret Manager |
+| **1** | 파일럿 오픈 직전 | 🙋 "HR 에이전트 좋다던데 어디서 써요?" — 에이전트가 **박지훈의 노트북**에서 돌고 있다. HR 시스템 토큰도 노트북에 평문으로 있다. | **Agent Runtime** + Secret Manager |
 | **2** | 3개월 뒤, 에이전트 12개 | 🛡️ "인사 시스템 데이터를 **바꿀 수 있는** 에이전트 목록, 내일까지 주세요." — 아무도 전체를 모른다. | **Agent Registry** + Agent Identity |
 | **3** | 어느 월요일 | 👩‍💼 "직원의 **승인된 휴가가 에이전트 때문에 취소**됐어요!" 🛡️ "오늘 안에 모든 에이전트의 취소 기능을 막으세요." — 코드를 고쳐 재배포하는 것 말고는 방법이 없다. | **Agent Gateway** + IAP 정책 |
 | **4** | 레드팀 점검 | 🧑‍🔧 티켓 본문에 **숨겨진 지시**를 에이전트가 따르고, 🙋 직원이 입력한 **카드번호**가 외부 SaaS 티켓에 평문으로 저장된다. | **Model Armor** |
@@ -52,7 +48,7 @@ flowchart LR
 
 - [시작하기 전에](#시작하기-전에)
 - [진행 방법](#진행-방법)
-- [1단계: Agent Engine에 배포](#1단계-agent-engine에-배포)
+- [1단계: Agent Runtime에 배포](#1단계-agent-runtime에-배포)
 - [2단계: Agent Registry로 에이전트와 도구 파악](#2단계-agent-registry로-에이전트와-도구-파악)
 - [3단계: Agent Gateway로 도구 호출 통제](#3단계-agent-gateway로-도구-호출-통제)
 - [4단계: Model Armor로 내용 검사](#4단계-model-armor로-내용-검사)
@@ -151,7 +147,7 @@ flowchart LR
 
 ---
 
-## 1단계: Agent Engine에 배포
+## 1단계: Agent Runtime에 배포
 
 ### 사건: "그 에이전트, 어디서 써요?"
 
@@ -163,7 +159,7 @@ flowchart LR
 | 🧑‍💻 | 박지훈 (운영자) | 직원이 "어제 에이전트가 이상한 답을 했다"고 하는데 **대화 기록과 로그가 남아 있지 않아** 원인을 찾을 수 없습니다. 50명이 동시에 쓰면 노트북이 버티지 못합니다. |
 | 🛡️ | 정태호 (보안팀장) | "HR 시스템에 접속하는 **토큰이 개발자 노트북 `.env`에 평문**으로 있다고요? 노트북을 잃어버리면 인사 데이터 접근 권한이 그대로 넘어갑니다." |
 
-### 해결: Agent Engine (Agent Runtime) + Secret Manager
+### 해결: Agent Runtime + Secret Manager
 
 **Agent Runtime**은 에이전트를 올리기만 하면 GCP가 인프라를 관리해 주는 **서버리스 에이전트 실행 환경**입니다.
 
@@ -177,13 +173,13 @@ flowchart LR
 ### 프롬프트
 
 ```text
-이 워크스페이스의 ADK 에이전트를 Agent Engine(Agent Runtime)에 배포해줘.
+이 워크스페이스의 ADK 에이전트를 Agent Runtime에 배포해줘.
 
 [조건]
 - 배포 도구는 agents-cli를 써. 없으면 `uv tool install google-agents-cli`로 설치해.
 - 배포에 필요한 파일(Dockerfile 등)이 없으면 `agents-cli scaffold enhance`로 추가해.
 - MCP_TOKEN은 환경 변수로 넣지 말고 Secret Manager 시크릿 hr-agent-mcp-token으로 만들어 --secrets로 연결해.
-- .env의 나머지 에이전트 설정값(MCP_BASE_URL, USE_VERTEX_SEARCH, DATA_STORE_ID 등)은 --update-env-vars로 넣어. 프로젝트·리전·인증 관련 값은 Agent Engine이 채우니 빼.
+- .env의 나머지 에이전트 설정값(MCP_BASE_URL, USE_VERTEX_SEARCH, DATA_STORE_ID 등)은 --update-env-vars로 넣어. 프로젝트·리전·인증 관련 값은 Agent Runtime이 채우니 빼.
 - 배포된 에이전트가 시크릿을 읽고, Gemini를 호출하고, Vertex AI Search를 검색할 수 있게 실행 서비스 계정에 필요한 IAM 역할을 부여해.
 
 [완료 조건]
@@ -207,7 +203,7 @@ flowchart LR
 flowchart LR
     U["사용자<br/>(콘솔 플레이그라운드, API)"] --> AR
     subgraph GCP["내 GCP 프로젝트 · us-central1"]
-        AR["Agent Engine<br/>HR 에이전트 (ADK)"]
+        AR["Agent Runtime<br/>HR 에이전트 (ADK)"]
         SM[("Secret Manager<br/>MCP 토큰")]
         GEM[["Gemini<br/>(Vertex AI)"]]
         VS[("Vertex AI Search<br/>규정 벡터 스토어")]
@@ -224,14 +220,14 @@ flowchart LR
 
 | 구성 요소 | 역할 | 로컬(실습1)과 비교 |
 |---|---|---|
-| Agent Engine 인스턴스 | 에이전트 컨테이너를 실행하고 요청량에 따라 확장 | `adk web` 대신 GCP가 실행 |
+| Agent Runtime 인스턴스 | 에이전트 컨테이너를 실행하고 요청량에 따라 확장 | `adk web` 대신 GCP가 실행 |
 | 컨테이너 이미지 | `agents-cli deploy`가 소스를 올리면 GCP가 빌드 | `uv sync` 대신 |
 | Secret Manager | MCP 토큰 보관, 배포 시 에이전트에 주입 | `.env` 평문 대신 |
 | 세션 저장소 | 대화 기록을 관리형 세션으로 저장 | PC 메모리 대신 |
 | Cloud Logging / Trace | 에이전트 로그와 호출 추적 | 터미널 출력 대신 |
 | Vertex AI Search, Gemini | 실습1에서 쓰던 그대로 | 변화 없음 |
 
-**요청 흐름**: 사용자 질문 → Agent Engine의 `concierge_agent` → Gemini가 도구 선택 → 도구 실행
+**요청 흐름**: 사용자 질문 → Agent Runtime의 `concierge_agent` → Gemini가 도구 선택 → 도구 실행
 (규정은 Vertex AI Search, 휴가·티켓은 **인터넷을 통해 MCP 서버를 직접 호출**) → 답변
 
 > 🧑‍💻 파일럿은 성공적으로 열렸습니다. 이제 에이전트는 박지훈의 노트북이 아니라 GCP에서 24시간 동작합니다.
@@ -257,7 +253,7 @@ flowchart LR
 
 | 서비스 | 하는 일 | 해결되는 문제 |
 |---|---|---|
-| **Agent Registry** | 조직의 **에이전트, MCP 서버, 도구, API 엔드포인트를 한곳에 모은 카탈로그**입니다. Agent Engine에 배포한 에이전트는 자동으로 등록되고, MCP 서버는 도구 명세(`toolspec.json`)와 함께 등록합니다. | 감사 요청에 **명령 한 줄**로 답하고, 다른 팀은 이미 있는 MCP 서버를 **찾아서 재사용**합니다. |
+| **Agent Registry** | 조직의 **에이전트, MCP 서버, 도구, API 엔드포인트를 한곳에 모은 카탈로그**입니다. Agent Runtime에 배포한 에이전트는 자동으로 등록되고, MCP 서버는 도구 명세(`toolspec.json`)와 함께 등록합니다. | 감사 요청에 **명령 한 줄**로 답하고, 다른 팀은 이미 있는 MCP 서버를 **찾아서 재사용**합니다. |
 | **도구 주석** | 도구마다 `isReadOnly`(조회만 하는지), `isDestructive`(되돌리기 어려운지)를 표시합니다. | "데이터를 바꿀 수 있는 도구"를 바로 골라낼 수 있습니다. 3단계에서 차단할 도구를 고를 때도 씁니다. |
 | **Agent Identity** | 에이전트마다 **고유한 신원(SPIFFE ID)** 을 부여합니다. 에이전트의 수명 주기에 묶여 있고, 로그에 에이전트 신원이 남습니다. | 공용 서비스 계정 대신 **에이전트별로** 권한을 주고 감사할 수 있습니다. 3단계 정책의 "누가"가 됩니다. |
 
@@ -311,7 +307,7 @@ HR 에이전트의 도구에는 다음과 같이 주석을 붙입니다.
 flowchart LR
     U[사용자] --> AR
     subgraph GCP["내 GCP 프로젝트 · us-central1"]
-        AR["Agent Engine<br/>HR 에이전트<br/>+ Agent Identity"]
+        AR["Agent Runtime<br/>HR 에이전트<br/>+ Agent Identity"]
         REG[("Agent Registry<br/>에이전트 · MCP 서버 · 도구 주석")]
         GEM[["Gemini"]]
         VS[("Vertex AI Search")]
@@ -428,7 +424,7 @@ Agent Gateway의 IAP 승인 확장 프로그램을 DRY_RUN에서 ENFORCE(시행)
 flowchart LR
     U[사용자] --> AR
     subgraph GCP["내 GCP 프로젝트 · us-central1"]
-        AR["Agent Engine<br/>HR 에이전트<br/>+ Agent Identity"]
+        AR["Agent Runtime<br/>HR 에이전트<br/>+ Agent Identity"]
         AGW{{"Agent Gateway<br/>(이그레스)"}}
         IAP["IAP 승인<br/>REQUEST_AUTHZ"]
         REG[("Agent Registry<br/>+ 도구별 권한 정책")]
@@ -556,7 +552,7 @@ Model Armor로 에이전트가 MCP 도구와 주고받는 내용을 검사하도
 flowchart LR
     U[사용자] --> AR
     subgraph GCP["내 GCP 프로젝트 · us-central1"]
-        AR["Agent Engine<br/>HR 에이전트<br/>+ Agent Identity"]
+        AR["Agent Runtime<br/>HR 에이전트<br/>+ Agent Identity"]
         AGW{{"Agent Gateway<br/>(이그레스)"}}
         IAP["IAP 승인<br/>REQUEST_AUTHZ<br/>누가 · 어떤 도구"]
         MA["Model Armor<br/>CONTENT_AUTHZ<br/>무슨 내용"]
@@ -579,7 +575,7 @@ flowchart LR
     class MA new
 ```
 
-**요청 흐름 (최종)**: 사용자 질문 → Agent Engine → 도구 호출이 **Agent Gateway**에 도착
+**요청 흐름 (최종)**: 사용자 질문 → Agent Runtime → 도구 호출이 **Agent Gateway**에 도착
 → ① **IAP**: 이 에이전트가 이 도구를 써도 되는가? (Agent Registry + IAM 정책)
 → ② **Model Armor**: 도구에 보내는 요청과 돌려받는 응답에 민감정보나 악성 지시가 있는가?
 → 둘 다 통과해야 MCP 서버와 주고받음 → 모든 판정은 Cloud Logging에 기록
@@ -592,7 +588,7 @@ flowchart LR
 
 | 단계 | 사건 | 적용한 서비스 | 결과 |
 |---|---|---|---|
-| 1 | 에이전트가 개발자 노트북에서 돌고, 토큰이 평문 파일에 있음 | Agent Engine, Secret Manager | 🙋 직원 누구나 24시간 사용, 🧑‍💻 세션·트레이스로 원인 분석, 🛡️ 토큰은 시크릿으로 보관 |
+| 1 | 에이전트가 개발자 노트북에서 돌고, 토큰이 평문 파일에 있음 | Agent Runtime, Secret Manager | 🙋 직원 누구나 24시간 사용, 🧑‍💻 세션·트레이스로 원인 분석, 🛡️ 토큰은 시크릿으로 보관 |
 | 2 | "인사 데이터를 바꾸는 에이전트 목록 주세요" — 아무도 모름 | Agent Registry, Agent Identity | 🛡️ 감사 질문에 조회 한 번으로 답변, 🧑‍💻 다른 팀이 기존 MCP 서버를 찾아 재사용 |
 | 3 | 에이전트가 승인된 휴가를 취소한 사고 | Agent Gateway, IAP 승인 정책 | 🛡️ 코드 변경 없이 전사 에이전트의 위험 도구를 즉시 차단, 모든 호출을 감사 기록 |
 | 4 | 티켓 속 숨은 지시, 카드번호 외부 유출 | Model Armor | 🧑‍🔧 도구 응답 속 악성 지시와 🙋 외부로 나가는 민감정보를 게이트웨이에서 차단 |
@@ -609,7 +605,7 @@ flowchart LR
 | 품질 관리 | 평가 데이터셋으로 답변 품질을 측정하고, Cloud Trace로 느린 구간을 찾습니다. |
 
 > [!WARNING]
-> 실습이 끝나면 [부록 B. 리소스 정리](#부록-b-리소스-정리)의 프롬프트로 리소스를 삭제하세요. Agent Engine은 인스턴스가 떠 있는 동안 과금됩니다.
+> 실습이 끝나면 [부록 B. 리소스 정리](#부록-b-리소스-정리)의 프롬프트로 리소스를 삭제하세요. Agent Runtime은 인스턴스가 떠 있는 동안 과금됩니다.
 
 ---
 
@@ -630,11 +626,11 @@ flowchart LR
 
 ## 부록 B. 리소스 정리
 
-Antigravity에 아래 프롬프트를 넣습니다. Agent Engine은 인스턴스가 떠 있는 동안 과금되므로 실습이 끝나면 꼭 지우세요.
+Antigravity에 아래 프롬프트를 넣습니다. Agent Runtime은 인스턴스가 떠 있는 동안 과금되므로 실습이 끝나면 꼭 지우세요.
 
 ```text
 실습2에서 만든 GCP 리소스를 모두 삭제해줘.
-- Agent Engine(Agent Runtime)에 배포한 HR 에이전트
+- Agent Runtime에 배포한 HR 에이전트
 - Agent Gateway, 승인 정책(REQUEST_AUTHZ, CONTENT_AUTHZ), 승인 확장 프로그램(IAP, Model Armor)
 - Model Armor 템플릿(hr-agent-request, hr-agent-response)
 - Agent Registry에 등록한 MCP 서버와 엔드포인트
