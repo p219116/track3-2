@@ -6,7 +6,7 @@
 
 ```mermaid
 flowchart LR
-    P1["실습1<br/>로컬 실행"] --> S1["1단계<br/>Agent Runtime<br/>배포"]
+    P1["실습1<br/>로컬 실행"] --> S1["1단계<br/>Agent Runtime 배포<br/>+ 직원용 화면"]
     S1 --> S2["2단계<br/>Agent Registry<br/>목록화"]
     S2 --> S3["3단계<br/>Agent Gateway<br/>호출 통제"]
     S3 --> S4["4단계<br/>Model Armor<br/>내용 검사"]
@@ -33,7 +33,7 @@ flowchart LR
 
 | 단계 | 시점 | 사건 | 해결 |
 |---|---|---|---|
-| **1** | 파일럿 오픈 직전 | 🙋 "HR 에이전트 좋다던데 어디서 써요?" — 에이전트가 **박지훈의 노트북**에서 돌고 있다. HR 시스템 토큰도 노트북에 평문으로 있다. | **Agent Runtime** + Secret Manager |
+| **1** | 파일럿 오픈 직전 | 🙋 "HR 에이전트 좋다던데 어디서 써요?" — 에이전트가 **박지훈의 노트북**에서 돌고 있다. HR 시스템 토큰도 노트북에 평문으로 있다. | **Agent Runtime** + Secret Manager + Gemini Enterprise 또는 웹 앱 |
 | **2** | 3개월 뒤, 에이전트 12개 | 🛡️ "인사 시스템 데이터를 **바꿀 수 있는** 에이전트 목록, 내일까지 주세요." — 아무도 전체를 모른다. | **Agent Registry** + Agent Identity |
 | **3** | 어느 월요일 | 👩‍💼 "직원의 **승인된 휴가가 에이전트 때문에 취소**됐어요!" 🛡️ "오늘 안에 모든 에이전트의 취소 기능을 막으세요." — 코드를 고쳐 재배포하는 것 말고는 방법이 없다. | **Agent Gateway** + IAP 정책 |
 | **4** | 레드팀 점검 | 🧑‍🔧 티켓 본문에 **숨겨진 지시**를 에이전트가 따르고, 🙋 직원이 입력한 **카드번호**가 외부 SaaS 티켓에 평문으로 저장된다. | **Model Armor** |
@@ -159,18 +159,29 @@ flowchart LR
 | 🧑‍💻 | 박지훈 (운영자) | 직원이 "어제 에이전트가 이상한 답을 했다"고 하는데 **대화 기록과 로그가 남아 있지 않아** 원인을 찾을 수 없습니다. 50명이 동시에 쓰면 노트북이 버티지 못합니다. |
 | 🛡️ | 정태호 (보안팀장) | "HR 시스템에 접속하는 **토큰이 개발자 노트북 `.env`에 평문**으로 있다고요? 노트북을 잃어버리면 인사 데이터 접근 권한이 그대로 넘어갑니다." |
 
-### 해결: Agent Runtime + Secret Manager
+### 해결: Agent Runtime + Secret Manager + 직원용 화면
 
 **Agent Runtime**은 에이전트를 올리기만 하면 GCP가 인프라를 관리해 주는 **서버리스 에이전트 실행 환경**입니다.
+Agent Runtime은 에이전트를 **API로만** 제공하고 화면(UI)은 없으므로, 직원이 쓸 **화면을 따로 연결**합니다.
 
-| 문제 | Agent Runtime에서 해결되는 방식 |
+| 문제 | 해결 방식 |
 |---|---|
-| 노트북이 꺼지면 멈춤, 동시 사용 불가 | 관리형 환경에서 항상 실행되고 요청량에 따라 자동 확장 |
-| 대화 기록이 없음 | **Sessions**가 대화 상태를 저장해 이어서 대화할 수 있음 |
-| 원인 분석 불가 | **Cloud Logging / Cloud Trace**가 기본 연동되어 에이전트·도구 호출 과정을 추적 |
-| 토큰이 평문 파일에 있음 | 토큰은 **Secret Manager**에 보관하고 배포할 때 에이전트에 연결 |
+| 노트북이 꺼지면 멈춤, 동시 사용 불가 | **Agent Runtime**: 관리형 환경에서 항상 실행되고 요청량에 따라 자동 확장 |
+| 대화 기록이 없음 | **Sessions**: 대화 상태를 저장해 이어서 대화할 수 있음 |
+| 원인 분석 불가 | **Cloud Logging / Cloud Trace**: 에이전트·도구 호출 과정을 추적 |
+| 토큰이 평문 파일에 있음 | **Secret Manager**: 토큰을 보관하고 배포할 때 에이전트에 연결 |
+| 직원이 접속할 곳이 없음 | **1-1 Gemini Enterprise** 또는 **1-2 자체 웹 앱(Cloud Run)** 을 에이전트에 연결 |
 
-### 프롬프트
+1단계는 **공통 배포(1-0)** 를 먼저 하고, 직원용 화면을 **1-1 또는 1-2** 중에서 골라 연결합니다. 둘 다 해도 됩니다.
+
+| | 1-1 Gemini Enterprise | 1-2 자체 웹 앱 (Cloud Run) |
+|---|---|---|
+| 이럴 때 | 회사가 Gemini Enterprise 라이선스를 쓰고 있다 | Gemini Enterprise가 없거나, 우리 회사만의 화면이 필요하다 |
+| 직원이 쓰는 화면 | Gemini Enterprise 채팅 화면의 에이전트 목록 | 직접 만든 채팅 페이지 |
+| 로그인 | Gemini Enterprise 로그인 (회사 계정) | IAP (회사 계정) |
+| 만들 것 | 등록만 하면 됨 | 작은 웹 앱 1개 |
+
+### 1-0. 에이전트 배포 (공통)
 
 ```text
 이 워크스페이스의 ADK 에이전트를 Agent Runtime에 배포해줘.
@@ -178,36 +189,102 @@ flowchart LR
 [조건]
 - 배포 도구는 agents-cli를 써. 없으면 `uv tool install google-agents-cli`로 설치해.
 - 배포에 필요한 파일(Dockerfile 등)이 없으면 `agents-cli scaffold enhance`로 추가해.
+- google-cloud-aiplatform은 1.128.0보다 높은 버전을 써 (낮으면 Gemini Enterprise에서 Session not found 오류가 나).
 - MCP_TOKEN은 환경 변수로 넣지 말고 Secret Manager 시크릿 hr-agent-mcp-token으로 만들어 --secrets로 연결해.
 - .env의 나머지 에이전트 설정값(MCP_BASE_URL, USE_VERTEX_SEARCH, DATA_STORE_ID 등)은 --update-env-vars로 넣어. 프로젝트·리전·인증 관련 값은 Agent Runtime이 채우니 빼.
 - 배포된 에이전트가 시크릿을 읽고, Gemini를 호출하고, Vertex AI Search를 검색할 수 있게 실행 서비스 계정에 필요한 IAM 역할을 부여해.
 
 [완료 조건]
-- 배포된 에이전트에 "내 연차 며칠 남았어?"와 "출산휴가는 몇 주야?"를 보내 답변을 보여줘.
+- 배포된 에이전트에 "내 연차 며칠 남았어?"와 "출산휴가는 몇 주야?"를 보내 답변을 보여줘 (agents-cli run 사용).
 - 만들어진 GCP 리소스를 표로 정리하고, 콘솔에서 확인할 수 있는 링크를 알려줘.
 ```
 
 > 배포는 보통 **5~10분** 걸립니다. 중간에 멈춘 것처럼 보여도 서버에서는 계속 진행되니 기다리세요.
 
-### ✅ 확인
+**✅ 확인**
 
-- [ ] [콘솔 → Agent Platform → Runtimes](https://console.cloud.google.com/agent-platform/runtimes)에 HR 에이전트가 보인다
+- [ ] [콘솔 → Agent Platform → Deployments](https://console.cloud.google.com/agent-platform/runtimes)에 HR 에이전트가 보인다
 - [ ] 배포된 에이전트가 연차 조회(MCP)와 규정 질문(Vertex AI Search)에 모두 답한다
-- [ ] 포털(토큰을 발급한 브라우저)에서, 배포된 에이전트로 신청한 휴가가 보인다
 - [ ] Secret Manager에 `hr-agent-mcp-token`이 있고, 에이전트 환경 변수에는 토큰 값이 없다
 - [ ] 콘솔의 에이전트 화면에서 방금 나눈 대화의 **세션과 트레이스**를 찾을 수 있다
+
+### 1-1. 직원용 화면 A: Gemini Enterprise에 등록
+
+회사에 **Gemini Enterprise 라이선스가 할당되어 있다**는 가정입니다. 에이전트를 등록하면 직원은 평소 쓰는 Gemini Enterprise 화면에서
+에이전트를 골라 대화합니다. Gemini Enterprise는 Agent Runtime의 에이전트를 **ADK 방식(`:streamQuery`)** 으로 직접 호출합니다.
+
+```text
+배포한 HR 에이전트를 Gemini Enterprise에 등록해서 직원들이 Gemini Enterprise 화면에서 쓸 수 있게 해줘.
+
+[조건]
+- agents-cli publish gemini-enterprise를 써. 등록 방식은 ADK(--registration-type adk)이고, Agent Runtime ID는 deployment_metadata.json에서 읽어.
+- 먼저 `agents-cli publish gemini-enterprise --list`로 내 프로젝트의 Gemini Enterprise 앱을 찾아.
+  앱이 없으면 hr-agent-ge라는 이름으로 만들어. 만들 수 없으면 멈추고 콘솔에서 만드는 방법을 알려줘.
+- 표시 이름은 "HR 컨시어지", 설명은 "휴가·인사정보 조회와 신청, HR 규정 안내, IT 티켓 처리를 돕는 사내 HR 에이전트"로 해.
+
+[완료 조건]
+- Gemini Enterprise 웹 앱 주소와, 화면에서 HR 컨시어지를 찾는 방법을 알려줘.
+- 직원이 이 에이전트를 쓰려면 필요한 조건(라이선스, IAM 역할)을 표로 정리해줘.
+```
+
+**✅ 확인**
+
+- [ ] Gemini Enterprise 화면의 **에이전트** 목록에 **HR 컨시어지**가 보인다
+- [ ] HR 컨시어지에게 "내 연차 며칠 남았어?", "출산휴가는 몇 주야?"를 물으면 답한다
+- [ ] "다음 주 금요일 연차 하루 신청해줘"로 신청한 휴가가 포털(토큰을 발급한 브라우저)에 보인다
+- [ ] 콘솔의 에이전트 세션 목록에 Gemini Enterprise에서 나눈 대화가 보인다
+
+### 1-2. 직원용 화면 B: 자체 웹 앱 (Cloud Run)
+
+Gemini Enterprise가 없거나 회사 전용 화면이 필요할 때입니다. 작은 채팅 웹 앱을 **Cloud Run**에 올리고,
+웹 앱 서버가 Agent Runtime의 에이전트를 호출합니다. 웹 앱 앞에는 **IAP**를 켜서 회사 계정으로 로그인한 사람만 들어오게 합니다.
+
+```text
+배포한 HR 에이전트를 직원들이 브라우저로 쓸 수 있도록, 간단한 채팅 웹 앱을 만들어 Cloud Run에 배포해줘.
+
+[앱]
+- frontend/ 폴더에 만들어. Python FastAPI 서버와 HTML/JS 한 페이지면 충분해. app/ 폴더는 건드리지 마.
+- 화면: 제목 "HR 컨시어지", 대화창, 입력창, 예시 질문 버튼 3개("내 연차 며칠 남았어?", "출산휴가는 몇 주야?", "내 IT 티켓 목록 보여줘").
+- 서버는 Agent Platform SDK로 배포된 에이전트(deployment_metadata.json의 Agent Runtime ID)를 호출해.
+  사용자마다 세션을 만들어 대화를 이어가고, 답변은 스트리밍으로 화면에 보여줘.
+- 에이전트가 도구를 호출하면 답변 위에 "🔧 도구이름"을 작게 표시해.
+- 사용자 ID는 IAP가 넣어 주는 X-Goog-Authenticated-User-Email 헤더에서 이메일을 꺼내 써. 헤더가 없으면(로컬 실행) local-user로 해.
+
+[배포]
+- Cloud Run 서비스 이름은 hr-agent-web, 리전은 us-central1.
+- 전용 서비스 계정 hr-agent-web-sa를 만들고, Agent Runtime을 호출하는 데 필요한 최소 역할(roles/aiplatform.user)만 줘.
+- 인터넷에 공개하지 말고 Cloud Run의 IAP(--iap)를 켜서 회사 계정으로 로그인한 사용자만 들어오게 해.
+  내 계정에 roles/iap.httpsResourceAccessor를 줘.
+  IAP를 켤 수 없는 환경이면 --no-allow-unauthenticated로 배포하고 gcloud run services proxy로 접속하는 방법을 알려줘.
+
+[완료 조건]
+- 먼저 로컬에서 실행해 동작을 확인한 뒤 Cloud Run에 배포해.
+- 웹 앱 주소를 알려주고, 예시 질문 3개가 모두 답하는지 확인해줘.
+```
+
+**✅ 확인**
+
+- [ ] 웹 앱 주소를 열면 회사 계정 로그인 후 **HR 컨시어지** 채팅 화면이 나온다
+- [ ] 예시 질문 3개에 모두 답하고, 도구를 쓸 때 🔧 표시가 보인다
+- [ ] 권한이 없는 다른 계정으로 열면 IAP가 접근을 막는다
+- [ ] 콘솔의 에이전트 세션 목록에 **내 이메일**을 사용자 ID로 한 세션이 보인다
 
 ### 무엇이 만들어졌나 (아키텍처)
 
 ```mermaid
 flowchart LR
-    U["사용자<br/>(콘솔 플레이그라운드, API)"] --> AR
+    E["직원<br/>(브라우저)"] --> GE
+    E --> WEB
     subgraph GCP["내 GCP 프로젝트 · us-central1"]
-        AR["Agent Runtime<br/>HR 에이전트 (ADK)"]
+        GE["1-1 Gemini Enterprise<br/>HR 컨시어지"]
+        WEB["1-2 Cloud Run 웹 앱<br/>hr-agent-web + IAP"]
+        AR["Agent Runtime<br/>HR 에이전트 (ADK)<br/>+ Sessions"]
         SM[("Secret Manager<br/>MCP 토큰")]
         GEM[["Gemini<br/>(Vertex AI)"]]
         VS[("Vertex AI Search<br/>규정 벡터 스토어")]
         OBS["Cloud Logging<br/>Cloud Trace"]
+        GE -- ":streamQuery" --> AR
+        WEB -- "Agent Platform SDK" --> AR
         SM -. 배포 시 주입 .-> AR
         AR --> GEM
         AR --> VS
@@ -215,22 +292,25 @@ flowchart LR
     end
     AR -- "인터넷으로 직접 호출" --> MCP[("실습용 SaaS<br/>WorkWeek · ServiceImmediately<br/>MCP 서버")]
     classDef new fill:#e6f4ea,stroke:#1e8e3e,stroke-width:2px;
-    class AR,SM,OBS new
+    class GE,WEB,AR,SM,OBS new
 ```
 
 | 구성 요소 | 역할 | 로컬(실습1)과 비교 |
 |---|---|---|
-| Agent Runtime 인스턴스 | 에이전트 컨테이너를 실행하고 요청량에 따라 확장 | `adk web` 대신 GCP가 실행 |
+| Gemini Enterprise 등록 (1-1) | 직원이 Gemini Enterprise 화면에서 에이전트를 골라 대화 | `adk web` 개발 화면 대신 |
+| Cloud Run 웹 앱 + IAP (1-2) | 회사 계정으로 로그인한 직원만 쓰는 전용 채팅 화면 | `adk web` 개발 화면 대신 |
+| Agent Runtime 인스턴스 | 에이전트 컨테이너를 실행하고 요청량에 따라 확장 | 내 PC 대신 GCP가 실행 |
 | 컨테이너 이미지 | `agents-cli deploy`가 소스를 올리면 GCP가 빌드 | `uv sync` 대신 |
 | Secret Manager | MCP 토큰 보관, 배포 시 에이전트에 주입 | `.env` 평문 대신 |
-| 세션 저장소 | 대화 기록을 관리형 세션으로 저장 | PC 메모리 대신 |
+| 세션 저장소 | 대화 기록을 사용자별 관리형 세션으로 저장 | PC 메모리 대신 |
 | Cloud Logging / Trace | 에이전트 로그와 호출 추적 | 터미널 출력 대신 |
 | Vertex AI Search, Gemini | 실습1에서 쓰던 그대로 | 변화 없음 |
 
-**요청 흐름**: 사용자 질문 → Agent Runtime의 `concierge_agent` → Gemini가 도구 선택 → 도구 실행
+**요청 흐름**: 직원 질문 → Gemini Enterprise 또는 웹 앱 → Agent Runtime의 `concierge_agent` → Gemini가 도구 선택 → 도구 실행
 (규정은 Vertex AI Search, 휴가·티켓은 **인터넷을 통해 MCP 서버를 직접 호출**) → 답변
 
-> 🧑‍💻 파일럿은 성공적으로 열렸습니다. 이제 에이전트는 박지훈의 노트북이 아니라 GCP에서 24시간 동작합니다.
+> 🙋 김서연은 이제 Gemini Enterprise(또는 사내 웹 앱)에서 언제든 HR 컨시어지를 씁니다.
+> 🧑‍💻 에이전트는 박지훈의 노트북이 아니라 GCP에서 24시간 동작하고, 대화마다 세션과 트레이스가 남습니다.
 
 ---
 
@@ -305,7 +385,7 @@ HR 에이전트의 도구에는 다음과 같이 주석을 붙입니다.
 
 ```mermaid
 flowchart LR
-    U[사용자] --> AR
+    U["직원<br/>(GE / 웹 앱)"] --> AR
     subgraph GCP["내 GCP 프로젝트 · us-central1"]
         AR["Agent Runtime<br/>HR 에이전트<br/>+ Agent Identity"]
         REG[("Agent Registry<br/>에이전트 · MCP 서버 · 도구 주석")]
@@ -422,7 +502,7 @@ Agent Gateway의 IAP 승인 확장 프로그램을 DRY_RUN에서 ENFORCE(시행)
 
 ```mermaid
 flowchart LR
-    U[사용자] --> AR
+    U["직원<br/>(GE / 웹 앱)"] --> AR
     subgraph GCP["내 GCP 프로젝트 · us-central1"]
         AR["Agent Runtime<br/>HR 에이전트<br/>+ Agent Identity"]
         AGW{{"Agent Gateway<br/>(이그레스)"}}
@@ -550,7 +630,7 @@ Model Armor로 에이전트가 MCP 도구와 주고받는 내용을 검사하도
 
 ```mermaid
 flowchart LR
-    U[사용자] --> AR
+    U["직원<br/>(GE / 웹 앱)"] --> AR
     subgraph GCP["내 GCP 프로젝트 · us-central1"]
         AR["Agent Runtime<br/>HR 에이전트<br/>+ Agent Identity"]
         AGW{{"Agent Gateway<br/>(이그레스)"}}
@@ -588,7 +668,7 @@ flowchart LR
 
 | 단계 | 사건 | 적용한 서비스 | 결과 |
 |---|---|---|---|
-| 1 | 에이전트가 개발자 노트북에서 돌고, 토큰이 평문 파일에 있음 | Agent Runtime, Secret Manager | 🙋 직원 누구나 24시간 사용, 🧑‍💻 세션·트레이스로 원인 분석, 🛡️ 토큰은 시크릿으로 보관 |
+| 1 | 에이전트가 개발자 노트북에서 돌고, 토큰이 평문 파일에 있음 | Agent Runtime, Secret Manager, Gemini Enterprise / Cloud Run | 🙋 직원이 Gemini Enterprise나 사내 웹 앱에서 24시간 사용, 🧑‍💻 세션·트레이스로 원인 분석, 🛡️ 토큰은 시크릿으로 보관 |
 | 2 | "인사 데이터를 바꾸는 에이전트 목록 주세요" — 아무도 모름 | Agent Registry, Agent Identity | 🛡️ 감사 질문에 조회 한 번으로 답변, 🧑‍💻 다른 팀이 기존 MCP 서버를 찾아 재사용 |
 | 3 | 에이전트가 승인된 휴가를 취소한 사고 | Agent Gateway, IAP 승인 정책 | 🛡️ 코드 변경 없이 전사 에이전트의 위험 도구를 즉시 차단, 모든 호출을 감사 기록 |
 | 4 | 티켓 속 숨은 지시, 카드번호 외부 유출 | Model Armor | 🧑‍🔧 도구 응답 속 악성 지시와 🙋 외부로 나가는 민감정보를 게이트웨이에서 차단 |
@@ -599,7 +679,7 @@ flowchart LR
 |---|---|
 | 사용자가 직접 입력하는 공격 차단 | **Client-to-Agent(인그레스) 게이트웨이**에 Model Armor를 붙여 "이전 지시를 무시해" 같은 탈옥 시도를 에이전트에 닿기 전에 막습니다. |
 | 사고의 근본 원인 해결 | **Semantic Governance Policies**로 "사용자가 명시적으로 요청하지 않은 휴가 취소 금지" 같은 자연어 규칙을 게이트웨이에서 적용합니다. 3단계처럼 도구 전체를 막지 않아도 됩니다. |
-| 사용자별 신원 | 지금은 모든 요청이 **토큰 주인 한 명**으로 처리됩니다. Gemini Enterprise와 OAuth로 로그인한 사용자별로 권한을 적용하면 로그에 **사용자와 에이전트 신원이 함께** 남습니다. |
+| 사용자별 신원 | 직원은 Gemini Enterprise나 IAP로 로그인하지만, MCP 호출은 여전히 **토큰 주인 한 명**으로 처리됩니다. OAuth 사용자 위임으로 로그인한 직원의 권한으로 HR 시스템을 호출하면 로그에 **사용자와 에이전트 신원이 함께** 남습니다. |
 | 한국 개인정보 보호 | Model Armor에 **고급 SDP 템플릿**을 연결해 주민등록번호, 계좌번호 등 한국 정보 유형을 검사합니다. |
 | 비공개 네트워크 | MCP 서버를 VPC 안에 두고 PSC 인터페이스와 **VPC 서비스 제어**로 데이터 유출 경계를 만듭니다. |
 | 품질 관리 | 평가 데이터셋으로 답변 품질을 측정하고, Cloud Trace로 느린 구간을 찾습니다. |
@@ -617,6 +697,10 @@ flowchart LR
 | `agents-cli deploy`가 오래 걸리거나 터미널이 끊김 | 배포는 서버에서 계속 진행됨 (5~10분) | 기다린 뒤 Antigravity에 `배포 상태 확인해줘` (`agents-cli deploy --status`) |
 | 배포된 에이전트가 `401` / `Unauthorized` | MCP 토큰 만료(7일) | [포털](docs/lab1-catchup.md#4-mcp-토큰-발급)에서 새로 발급 → Antigravity에 `hr-agent-mcp-token 시크릿에 새 버전을 추가하고 다시 배포해줘` |
 | 권한을 준 직후에도 `403 PERMISSION_DENIED` | IAM 반영 지연 | 1~2분 뒤 다시 시도 |
+| Gemini Enterprise에서 `Session not found` | `google-cloud-aiplatform` 1.128.0 이하 | Antigravity에 `google-cloud-aiplatform을 최신으로 올리고 다시 배포한 뒤 Gemini Enterprise에 다시 등록해줘` (재등록은 기존 등록을 덮어씀) |
+| Gemini Enterprise에 HR 컨시어지가 안 보이거나 답하지 않음 | 라이선스 미할당, 권한 부족, 에이전트 오류 | 라이선스와 Discovery Engine 사용자 역할 확인. 에이전트 오류는 Antigravity에 `Agent Runtime 로그에서 streaming_agent_run_with_events 오류를 찾아줘` |
+| 웹 앱 접속 시 `You don't have access` | IAP 접근 권한 없음 | 해당 계정에 `roles/iap.httpsResourceAccessor` 부여 |
+| 웹 앱은 열리는데 답변이 오지 않음 | 웹 앱 서비스 계정에 Agent Runtime 호출 권한 없음 | `hr-agent-web-sa`에 `roles/aiplatform.user` 확인, Cloud Run 로그 확인 |
 | 게이트웨이 연결 후 모든 요청이 `498` 오류 | 기본 거부 상태에서 필수 Google API 엔드포인트가 허용되지 않음 | DRY_RUN으로 되돌린 뒤 Antigravity에 `게이트웨이 거부 로그를 보고 빠진 엔드포인트(리전형·mTLS 변형 포함)를 등록하고 허용해줘` |
 | ENFORCE인데 취소 도구가 차단되지 않음 | 아직 DRY_RUN이거나 정책 조건 오류 | 확장 프로그램 모드와 `mcp.toolName` 조건을 확인 |
 | Model Armor를 붙였는데 아무것도 차단되지 않음 | 확장 프로그램 권한 누락 또는 템플릿 리전 불일치 | Service Extensions 서비스 에이전트의 `modelarmor.calloutUser`, `modelarmor.user` 역할과 템플릿 리전(us-central1) 확인 |
@@ -631,6 +715,8 @@ Antigravity에 아래 프롬프트를 넣습니다. Agent Runtime은 인스턴�
 ```text
 실습2에서 만든 GCP 리소스를 모두 삭제해줘.
 - Agent Runtime에 배포한 HR 에이전트
+- Gemini Enterprise에 등록한 HR 컨시어지 (앱은 실습에서 새로 만든 경우에만 삭제)
+- Cloud Run 서비스(hr-agent-web)와 서비스 계정(hr-agent-web-sa)
 - Agent Gateway, 승인 정책(REQUEST_AUTHZ, CONTENT_AUTHZ), 승인 확장 프로그램(IAP, Model Armor)
 - Model Armor 템플릿(hr-agent-request, hr-agent-response)
 - Agent Registry에 등록한 MCP 서버와 엔드포인트
@@ -653,4 +739,5 @@ Antigravity에 아래 프롬프트를 넣습니다. Agent Runtime은 인스턴�
 | Agent Gateway | [Agent Gateway overview](https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/agent-gateway-overview) |
 | Agent Runtime을 게이트웨이에 연결 (필수 엔드포인트 목록) | [Route Agent Runtime traffic through Agent Gateway](https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-gateway-runtime-deploy) |
 | 게이트웨이의 Model Armor | [Configure Model Armor](https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/configure-model-armor) |
+| Cloud Run에 IAP 켜기 | [Configure IAP for Cloud Run](https://docs.cloud.google.com/run/docs/securing/identity-aware-proxy-cloud-run) |
 | Model Armor 필터와 권장 설정 | [Model Armor overview](https://docs.cloud.google.com/model-armor/overview) |
